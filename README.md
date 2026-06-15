@@ -1,7 +1,15 @@
-# Antigravity Watermark Eraser
+# Auto Video & Image Watermark Eraser
 
-Xóa watermark VEO / VieON khỏi **video và ảnh** bằng Reverse Alpha-Blending.
-Không cần cài đặt thủ công — chỉ cần chạy `run.bat`.
+Xóa watermark VEO 3 / Veo Omni khỏi video và ảnh bằng Reverse Alpha-Blending. Không cần cài đặt thủ công — chỉ cần chạy `run.bat` là bạn có giao diện web trên chính máy bạn để sử dụng.
+
+---
+
+## Về tác giả: Lê Quốc Huy Digi
+
+1. Chào các bạn mình là **Lê Quốc Huy** hay thường viết tắt là **Huy Digi**
+2. Mình chuyên triển khai các dự án web Wordpress, PHP từ 2016 và chuyển sang phát triển các Workflow Automation như n8n và ứng dụng với AI từ 2025
+3. Theo dõi kênh Youtube của mình để không bỏ lỡ những update & thủ thuật công nghệ thông tin & AI mới nhất từ mình nhé 👉 [https://www.youtube.com/@huydigi](https://www.youtube.com/@huydigi)
+4. Bạn có thể inbox cho mình tại Facebook, ae cafe giao lưu tại Hà Nội 👉 [https://www.facebook.com/lequochuydigi/](https://www.facebook.com/lequochuydigi/)
 
 ---
 
@@ -59,16 +67,10 @@ python app.py
 
 ## Cấu hình (tuỳ chọn)
 
-Thay vì chọn trong UI, có thể set biến môi trường trước khi chạy:
-
 ```bat
 :: Windows CMD
 set VIDEOS_DIR=D:\MyVideos
 run.bat
-
-:: PowerShell
-$env:VIDEOS_DIR="D:\MyVideos"
-python app.py
 ```
 
 | Biến | Mặc định | Mô tả |
