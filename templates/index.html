@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watermark VEO Remover - Tối Giản & Cao Cấp</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="/static/index.css">
+</head>
+<body>
+    <div class="background-decor">
+        <div class="glow-orb orb-1"></div>
+        <div class="glow-orb orb-2"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <div class="logo">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>Antigravity <span class="highlight">Watermark Eraser</span></span>
+            </div>
+            <p class="subtitle">Xóa watermark VEO/VieON siêu nhỏ gọn ở góc video bằng công nghệ AI Inpainting</p>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="workspace">
+            <!-- Left Panel: Select & Settings -->
+            <section class="control-panel glass-card">
+                <h2 class="panel-title"><i class="fa-solid fa-list-video"></i> Bước 1: Chọn Video</h2>
+                <div class="video-list-container">
+                    <ul id="video-list" class="video-list">
+                        <li class="loading-item"><i class="fa-solid fa-circle-notch fa-spin"></i> Đang tải danh sách video...</li>
+                    </ul>
+                </div>
+
+                <div id="settings-group" class="settings-group disabled">
+                    <h2 class="panel-title"><i class="fa-solid fa-sliders"></i> Bước 2: Tùy Chọn Xóa</h2>
+
+                    <!-- Shape selector -->
+                    <div class="setting-item">
+                        <label>Hình dạng vùng chọn:</label>
+                        <div class="shape-buttons">
+                            <button class="btn btn-secondary shape-btn active" data-shape="rect" title="Hình chữ nhật">
+                                <i class="fa-regular fa-square"></i> Vuông
+                            </button>
+                            <button class="btn btn-secondary shape-btn" data-shape="diamond" title="Hình thoi">
+                                <i class="fa-regular fa-gem"></i> Thoi
+                            </button>
+                            <button class="btn btn-secondary shape-btn" data-shape="ellipse" title="Hình tròn/elip">
+                                <i class="fa-regular fa-circle"></i> Tròn
+                            </button>
+                            <button class="btn btn-secondary shape-btn" data-shape="poly" title="Vẽ tự do (lasso)">
+                                <i class="fa-solid fa-draw-polygon"></i> Custom
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Presets -->
+                    <div class="setting-item">
+                        <label>Vị trí Watermark mẫu:</label>
+                        <div class="preset-buttons">
+                            <button class="btn btn-secondary preset-btn" data-preset="veo-text">
+                                <i class="fa-solid fa-font"></i> Chữ "Veo" (Góc Dưới Phải)
+                            </button>
+                            <button class="btn btn-secondary preset-btn" data-preset="vieon-star">
+                                <i class="fa-solid fa-star"></i> Sao Lấp Lánh (Góc Dưới Phải)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Auto Detect -->
+                    <div class="setting-item">
+                        <button id="btn-detect" class="btn btn-gradient btn-full">
+                            <i class="fa-solid fa-crosshairs"></i> Tự Động Quét Watermark
+                        </button>
+                    </div>
+
+                    <!-- Method Selection -->
+                    <div class="setting-item">
+                        <label>Phương thức xử lý:</label>
+                        <div class="method-selector">
+                            <label class="method-option">
+                                <input type="radio" name="method" value="smart" checked>
+                                <div class="option-card">
+                                    <i class="fa-solid fa-brain"></i>
+                                    <div class="option-details">
+                                        <span class="option-title">Smart (Khuyên dùng)</span>
+                                        <span class="option-desc">Tính toán độ lệch pixel tự động</span>
+                                    </div>
+                                </div>
+                            </label>
+                            <label class="method-option">
+                                <input type="radio" name="method" value="inpaint">
+                                <div class="option-card">
+                                    <i class="fa-solid fa-magic"></i>
+                                    <div class="option-details">
+                                        <span class="option-title">Inpaint</span>
+                                        <span class="option-desc">Tự bù đắp ảnh nền</span>
+                                    </div>
+                                </div>
+                            </label>
+                            <label class="method-option">
+                                <input type="radio" name="method" value="blur">
+                                <div class="option-card">
+                                    <i class="fa-solid fa-eye-slash"></i>
+                                    <div class="option-details">
+                                        <span class="option-title">Blur</span>
+                                        <span class="option-desc">Làm mờ</span>
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Smart sliders -->
+                    <div id="smart-settings" class="setting-item param-group">
+                        <label>Tinh chỉnh AI (kéo để xem preview):</label>
+                        <div class="slider-row">
+                            <span class="slider-label">Độ mạnh xóa</span>
+                            <input type="range" id="sld-gain" class="slider" min="0.5" max="2.5" step="0.05" value="1.0">
+                            <span class="slider-val" id="val-gain">1.00</span>
+                        </div>
+                        <div class="slider-row">
+                            <span class="slider-label">Độ phủ</span>
+                            <input type="range" id="sld-floor" class="slider" min="0" max="0.1" step="0.005" value="0.015">
+                            <span class="slider-val" id="val-floor">0.015</span>
+                        </div>
+                        <div class="slider-row">
+                            <span class="slider-label">Mở rộng viền</span>
+                            <input type="range" id="sld-edge" class="slider" min="0" max="14" step="1" value="3">
+                            <span class="slider-val" id="val-edge">3</span>
+                        </div>
+                        <div class="slider-row">
+                            <span class="slider-label">Ngưỡng nhận</span>
+                            <input type="range" id="sld-tophat" class="slider" min="2" max="30" step="1" value="8">
+                            <span class="slider-val" id="val-tophat">8</span>
+                        </div>
+                        <div class="slider-row">
+                            <span class="slider-label">Khử trắng dư</span>
+                            <input type="range" id="sld-despill" class="slider" min="0" max="1" step="0.05" value="0">
+                            <span class="slider-val" id="val-despill">0.00</span>
+                        </div>
+                        <div class="slider-row">
+                            <span class="slider-label">Glow / Mịn rìa</span>
+                            <input type="range" id="sld-edge_blur" class="slider" min="0" max="25" step="1" value="0">
+                            <span class="slider-val" id="val-edge_blur">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Inpaint sliders -->
+                    <div id="inpaint-settings" class="setting-item param-group" style="display:none;">
+                        <label>Tinh chỉnh Inpaint:</label>
+                        <div class="slider-row">
+                            <span class="slider-label">Bán kính</span>
+                            <input type="range" id="sld-radius" class="slider" min="1" max="20" step="1" value="5">
+                            <span class="slider-val" id="val-radius">5</span>
+                        </div>
+                    </div>
+
+                    <!-- Blur sliders -->
+                    <div id="blur-settings" class="setting-item param-group" style="display:none;">
+                        <label>Tinh chỉnh Blur:</label>
+                        <div class="slider-row">
+                            <span class="slider-label">Độ mờ</span>
+                            <input type="range" id="sld-blur" class="slider" min="5" max="61" step="2" value="25">
+                            <span class="slider-val" id="val-blur">25</span>
+                        </div>
+                    </div>
+
+                    <!-- Preview button -->
+                    <div class="setting-item">
+                        <button id="btn-preview" class="btn btn-secondary btn-full" disabled>
+                            <i class="fa-solid fa-images"></i> Tạo / Cập nhật Preview
+                        </button>
+                    </div>
+
+                    <!-- Crop Info display -->
+                    <div class="setting-item coord-box">
+                        <div class="coord-row">
+                            <span>Vùng chọn:</span>
+                            <span id="coord-display">Chưa chọn</span>
+                        </div>
+                    </div>
+
+                    <!-- Action Button -->
+                    <button id="btn-process" class="btn btn-gradient btn-large btn-full mt-2" disabled>
+                        <i class="fa-solid fa-play"></i> BẮT ĐẦU XÓA WATERMARK
+                    </button>
+                </div>
+            </section>
+
+            <!-- Right Panel: Interactive Canvas & Preview -->
+            <section class="preview-panel glass-card">
+                <h2 class="panel-title"><i class="fa-solid fa-tv"></i> Bảng Xem Trước & Định Vị</h2>
+                <div id="zoom-controls" class="zoom-controls hidden">
+                    <button id="btn-zoom-out" class="btn btn-secondary zoom-btn" title="Thu nhỏ"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                    <span id="zoom-level" class="zoom-level">100%</span>
+                    <button id="btn-zoom-in" class="btn btn-secondary zoom-btn" title="Phóng to"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                    <button id="btn-zoom-reset" class="btn btn-secondary zoom-btn" title="Đặt lại"><i class="fa-solid fa-rotate-left"></i></button>
+                    <span class="zoom-hint">Khi đã zoom: giữ <b>Space</b> + kéo để di chuyển</span>
+                </div>
+                <div class="canvas-wrapper">
+                    <div id="canvas-placeholder" class="canvas-placeholder">
+                        <i class="fa-solid fa-video-slash"></i>
+                        <p>Vui lòng chọn video ở danh sách bên trái để bắt đầu</p>
+                    </div>
+                    <div id="interactive-container" class="interactive-container hidden">
+                        <img id="preview-image" src="" alt="Video Frame Preview">
+                        <canvas id="selection-canvas"></canvas>
+                        <div id="canvas-hint" class="canvas-hint">Kéo thả chuột để vẽ vùng watermark (Custom: giữ chuột vẽ tự do quanh logo)</div>
+                    </div>
+                </div>
+
+                <!-- Detection status -->
+                <div id="detect-status" class="detect-status hidden">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i> <span>Đang phân tích video tìm watermark...</span>
+                </div>
+
+                <!-- Before / After preview -->
+                <div id="ba-preview" class="ba-preview hidden">
+                    <h3 class="ba-title"><i class="fa-solid fa-wand-magic-sparkles"></i> So sánh Trước / Sau</h3>
+                    <div id="ba-loading" class="ba-loading hidden">
+                        <i class="fa-solid fa-circle-notch fa-spin"></i> Đang tạo preview...
+                    </div>
+                    <div class="ba-grid">
+                        <div class="ba-item">
+                            <span class="ba-tag ba-tag-before">TRƯỚC</span>
+                            <img id="ba-before" src="" alt="Before">
+                        </div>
+                        <div class="ba-item">
+                            <span class="ba-tag ba-tag-after">SAU</span>
+                            <img id="ba-after" src="" alt="After">
+                        </div>
+                    </div>
+                    <div id="ba-stats" class="ba-stats"></div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Progress Overlay / Card -->
+        <div id="progress-modal" class="modal-overlay hidden">
+            <div class="modal-card glass-card">
+                <h3 class="modal-title"><i class="fa-solid fa-circle-notch fa-spin highlight"></i> Đang xử lý video...</h3>
+                <p id="progress-video-name" class="progress-details">Đang chuẩn bị file...</p>
+                <div class="progress-bar-container">
+                    <div id="progress-bar-fill" class="progress-bar-fill" style="width: 0%;"></div>
+                </div>
+                <div class="progress-percentage"><span id="progress-text">0</span>%</div>
+                <p class="progress-warning"><i class="fa-solid fa-triangle-exclamation"></i> Vui lòng không tắt trang web hoặc cửa sổ lệnh trong lúc xử lý.</p>
+            </div>
+        </div>
+
+        <!-- Result Modal -->
+        <div id="result-modal" class="modal-overlay hidden">
+            <div class="modal-card glass-card result-card">
+                <i class="fa-solid fa-circle-check success-icon"></i>
+                <h3 class="modal-title">Xóa Watermark Thành Công!</h3>
+                <div class="result-details">
+                    <p>Video đã được lưu tại:</p>
+                    <div class="filepath-container">
+                        <code id="result-filepath">C:\Users\admin\Downloads\video_no_watermark.mp4</code>
+                    </div>
+                </div>
+                <div class="result-actions">
+                    <button id="btn-close-result" class="btn btn-gradient"><i class="fa-solid fa-check"></i> Hoàn thành</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script -->
+    <script src="/static/main.js"></script>
+</body>
+</html>
