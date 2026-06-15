@@ -704,4 +704,5 @@ def api_status(task_id):
 if __name__ == "__main__":
     print(f"Videos / images folder : {_videos_dir[0]}")
     print(f"Starting server        : http://{config.HOST}:{config.PORT}")
-    app.run(host=config.HOST, port=config.PORT, debug=config.DEBUG)
+    app.run(host=config.HOST, port=config.PORT, debug=config.DEBUG,
+            use_reloader=False)
