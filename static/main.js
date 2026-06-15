@@ -75,13 +75,24 @@ const btnCloseResult = document.getElementById('btn-close-result');
 // Context for Canvas
 const ctx = selectionCanvas.getContext('2d');
 
+// Current file type
+let currentFileType = 'video'; // 'video' | 'image'
+
+// Folder bar elements
+const folderInput   = document.getElementById('folder-input');
+const btnBrowse     = document.getElementById('btn-browse-folder');
+const btnApply      = document.getElementById('btn-apply-folder');
+const btnRefresh    = document.getElementById('btn-refresh-files');
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    loadCurrentFolder();
     loadVideos();
     setupCanvasListeners();
     setupPresetListeners();
     setupShapeListeners();
     setupZoomListeners();
+    setupFolderBar();
 
     btnDetect.addEventListener('click', runAutoDetection);
     btnProcess.addEventListener('click', startProcessing);
@@ -97,6 +108,62 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     updateMethodUI();
 });
+
+// ---- Folder bar -------------------------------------------------------------
+async function loadCurrentFolder() {
+    try {
+        const res = await fetch('/api/current_folder');
+        const data = await res.json();
+        if (data.success && folderInput) folderInput.value = data.folder;
+    } catch (_) {}
+}
+
+function setupFolderBar() {
+    if (!btnBrowse || !btnApply || !btnRefresh) return;
+
+    btnBrowse.addEventListener('click', async () => {
+        btnBrowse.disabled = true;
+        btnBrowse.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+        try {
+            const res = await fetch('/api/browse_folder', { method: 'POST',
+                headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            const data = await res.json();
+            if (data.success && data.folder) {
+                folderInput.value = data.folder;
+                await applyFolder(data.folder);
+            }
+        } catch (e) { alert('Lỗi mở hộp thoại chọn thư mục: ' + e); }
+        finally {
+            btnBrowse.disabled = false;
+            btnBrowse.innerHTML = '<i class="fa-solid fa-folder-tree"></i>';
+        }
+    });
+
+    btnApply.addEventListener('click', () => applyFolder(folderInput.value.trim()));
+
+    folderInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') applyFolder(folderInput.value.trim());
+    });
+
+    btnRefresh.addEventListener('click', loadVideos);
+}
+
+async function applyFolder(folder) {
+    if (!folder) return;
+    try {
+        const res = await fetch('/api/set_folder', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder })
+        });
+        const data = await res.json();
+        if (data.success) {
+            folderInput.value = data.folder;
+            await loadVideos();
+        } else {
+            alert('Lỗi: ' + data.error);
+        }
+    } catch (e) { alert('Lỗi kết nối: ' + e); }
+}
 
 // Show the slider group for the selected method
 function updateMethodUI() {
@@ -156,10 +223,13 @@ async function loadVideos() {
     }
 }
 
-// Render list of videos in left panel
+// Render list of videos/images in left panel
 function renderVideoList() {
     if (videos.length === 0) {
-        videoList.innerHTML = '<li class="loading-item">Không tìm thấy video nào trong thư mục Downloads</li>';
+        videoList.innerHTML = `<li class="loading-item">
+            Không tìm thấy file nào.<br>
+            <small style="opacity:.6">Chọn thư mục chứa video / ảnh ở trên.</small>
+        </li>`;
         return;
     }
 
@@ -169,11 +239,16 @@ function renderVideoList() {
         li.dataset.name = video.name;
 
         const sizeMb = (video.size / (1024 * 1024)).toFixed(1);
+        const isImg = video.type === 'image';
+        const badge = isImg
+            ? '<span class="file-type-badge badge-image">IMG</span>'
+            : '<span class="file-type-badge badge-video">VID</span>';
+        const icon = isImg ? 'fa-file-image' : 'fa-file-video';
 
         li.innerHTML = `
-            <span class="video-name">${video.name}</span>
+            <span class="video-name">${video.name}${badge}</span>
             <div class="video-meta">
-                <span><i class="fa-solid fa-file-video"></i> ${sizeMb} MB</span>
+                <span><i class="fa-solid ${icon}"></i> ${sizeMb} MB</span>
                 <span><i class="fa-solid fa-clock"></i> ${new Date(video.mtime * 1000).toLocaleDateString()}</span>
             </div>
         `;
@@ -214,6 +289,15 @@ async function selectVideo(videoName, element) {
         if (data.success) {
             originalWidth = data.width;
             originalHeight = data.height;
+            currentFileType = data.type || 'video';
+
+            // Update process button label
+            btnProcess.innerHTML = currentFileType === 'image'
+                ? '<i class="fa-solid fa-image"></i> BẮT ĐẦU XÓA WATERMARK (ẢNH)'
+                : '<i class="fa-solid fa-play"></i> BẮT ĐẦU XÓA WATERMARK';
+
+            // Hide detect/auto-scan for images (need video frames for variance)
+            btnDetect.style.display = currentFileType === 'image' ? 'none' : '';
 
             previewImage.src = data.preview_url + "?t=" + new Date().getTime();
 
@@ -677,10 +761,44 @@ async function runPreview(silent) {
     }
 }
 
-// Call process API to process video
+// Process — route to image (sync) or video (async) endpoint
 async function startProcessing() {
     if (!selectedVideo || cropBox.width <= 0) return;
 
+    if (currentFileType === 'image') {
+        await processImage();
+    } else {
+        await processVideo();
+    }
+}
+
+async function processImage() {
+    progressVideoName.innerText = `Ảnh: ${selectedVideo}`;
+    progressBarFill.style.width = '60%';
+    progressText.innerText = '—';
+    progressModalEl.classList.remove('hidden');
+
+    try {
+        const res = await fetch('/api/process_image', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(buildShapePayload())
+        });
+        const data = await res.json();
+        progressModalEl.classList.add('hidden');
+        if (data.success) {
+            resultFilepath.innerText = data.output_path;
+            resultModalEl.classList.remove('hidden');
+            loadVideos();
+        } else {
+            alert(`Lỗi xử lý ảnh: ${data.error}`);
+        }
+    } catch (err) {
+        progressModalEl.classList.add('hidden');
+        alert("Lỗi kết nối tới server");
+    }
+}
+
+async function processVideo() {
     progressVideoName.innerText = `Video: ${selectedVideo}`;
     progressBarFill.style.width = '0%';
     progressText.innerText = '0';
@@ -689,12 +807,10 @@ async function startProcessing() {
     try {
         const payload = buildShapePayload();
         const res = await fetch('/api/process', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
         const data = await res.json();
-
         if (data.success) {
             pollStatus(data.task_id);
         } else {

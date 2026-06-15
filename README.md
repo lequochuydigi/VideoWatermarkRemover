@@ -1,92 +1,94 @@
 # Antigravity Watermark Eraser
 
-Web app xóa watermark VEO / VieON khỏi video bằng **Reverse Alpha-Blending** — tái tạo nền gốc dưới watermark thay vì inpaint/blur, cho kết quả sạch và không có temporal flicker.
+Xóa watermark VEO / VieON khỏi **video và ảnh** bằng Reverse Alpha-Blending.
+Không cần cài đặt thủ công — chỉ cần chạy `run.bat`.
 
-## Tính năng
+---
 
-- **Reverse alpha-blending** (Smart) — un-blend watermark bán trong suốt, bảo toàn nền chuyển động
-- **Inpaint** — Telea inpainting
-- **Blur** — làm mờ Gaussian
-- Vẽ vùng chọn: **Vuông · Thoi · Tròn · Custom lasso**
-- **Zoom/pan** ảnh preview để khoanh chính xác
-- Before/After preview trực tiếp trước khi xử lý toàn video
-- Thanh chỉnh: gain, floor, edge expand, tophat threshold, de-spill, glow/edge blur
+## Cài đặt & Khởi động (Windows)
 
-## Yêu cầu
+1. **Tải về** và giải nén
+2. Đảm bảo đã cài **Python 3.10+** — [tải tại đây](https://www.python.org/downloads/)  
+   ⚠️ Nhớ tick **"Add Python to PATH"** khi cài đặt
+3. Double-click **`run.bat`**
 
-- Python ≥ 3.10
-- ffmpeg (có trong PATH hoặc tự động dùng `imageio-ffmpeg`)
+Script sẽ tự động:
+- Tạo môi trường ảo `.venv`
+- Cài thư viện từ `requirements.txt`
+- Mở trình duyệt tại `http://localhost:5000`
 
-## Cài đặt
+---
+
+## Cài đặt (Linux / macOS)
 
 ```bash
-git clone <repo-url>
-cd watermark_remover
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-## Sử dụng
-
-1. Đặt file `.mp4` vào thư mục `videos/` (hoặc chỉ định thư mục khác bằng biến môi trường)
-2. Khởi động server:
-
-```bash
 python app.py
 ```
 
-3. Mở trình duyệt tại `http://localhost:5000`
+---
 
-## Cấu hình
+## Sử dụng
 
-| Biến môi trường | Mặc định | Mô tả |
+1. Mở `http://localhost:5000`
+2. **Chọn thư mục** chứa video/ảnh bằng nút thư mục hoặc gõ đường dẫn trực tiếp
+3. Chọn file từ danh sách (hiển thị badge **VID** / **IMG**)
+4. Vẽ vùng watermark trên canvas (Vuông / Thoi / Tròn / Custom lasso)
+5. Chọn phương thức và tinh chỉnh slider → xem Before/After preview
+6. Bấm **Bắt đầu xóa** → file output lưu cùng thư mục gốc
+
+---
+
+## Tính năng
+
+| | |
+|---|---|
+| **Smart (Reverse Alpha-Blend)** | Tái tạo nền gốc dưới watermark, không temporal flicker |
+| **Inpaint** | Telea inpainting |
+| **Blur** | Làm mờ Gaussian |
+| **Hình dạng chọn vùng** | Vuông · Thoi · Tròn · Custom lasso |
+| **Zoom/Pan canvas** | Phóng to để chọn vùng chính xác |
+| **Before/After preview** | Live update khi kéo slider |
+| **Ảnh tĩnh** | Hỗ trợ JPG, PNG, WebP, BMP |
+| **Video** | MP4, MOV, AVI, MKV, WebM... |
+| **Chọn thư mục** | Dialog chọn thư mục ngay trong UI |
+
+---
+
+## Cấu hình (tuỳ chọn)
+
+Thay vì chọn trong UI, có thể set biến môi trường trước khi chạy:
+
+```bat
+:: Windows CMD
+set VIDEOS_DIR=D:\MyVideos
+run.bat
+
+:: PowerShell
+$env:VIDEOS_DIR="D:\MyVideos"
+python app.py
+```
+
+| Biến | Mặc định | Mô tả |
 |---|---|---|
-| `VIDEOS_DIR` | `./videos` | Thư mục chứa video đầu vào và output |
-| `HOST` | `localhost` | Host server |
+| `VIDEOS_DIR` | `~/Downloads` | Thư mục mặc định khi khởi động |
 | `PORT` | `5000` | Port server |
-| `DEBUG` | `true` | Flask debug mode |
+| `HOST` | `localhost` | Host (set `0.0.0.0` để mở LAN) |
 
-Ví dụ:
-
-```bash
-# Windows CMD
-set VIDEOS_DIR=D:\MyVideos && python app.py
-
-# PowerShell
-$env:VIDEOS_DIR="D:\MyVideos"; python app.py
-
-# Linux / macOS
-VIDEOS_DIR=/home/user/Videos python app.py
-```
-
-## Cách thuật toán Smart hoạt động
-
-Watermark VEO là ảnh trắng bán trong suốt, composite lên mỗi frame:
-
-```
-I = (1 - α) · J + α · 255
-```
-
-Vì watermark **tĩnh** còn nền **chuyển động**, temporal median qua ~30 frame tách được alpha matte.
-Sau đó mỗi frame được un-blend:
-
-```
-J = (I - α · 255) / (1 - α)
-```
-
-Pixel quá opaque (α > 0.9) fallback về Telea inpaint.
+---
 
 ## Cấu trúc
 
 ```
 watermark_remover/
-├── app.py              # Flask server + API endpoints
-├── smart_remover.py    # Reverse alpha-blending algorithm
-├── config.py           # Cấu hình (env vars)
+├── run.bat             ← Chạy cái này để dùng (Windows)
+├── app.py              ← Flask server
+├── smart_remover.py    ← Thuật toán reverse alpha-blending
+├── config.py           ← Đọc env vars
 ├── requirements.txt
-├── videos/             # Đặt .mp4 vào đây (gitignored)
-├── previews/           # Ảnh preview tạm (gitignored)
-├── templates/
-│   └── index.html
+├── templates/index.html
 └── static/
     ├── main.js
     └── index.css

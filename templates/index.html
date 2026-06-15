@@ -33,10 +33,25 @@
         <main class="workspace">
             <!-- Left Panel: Select & Settings -->
             <section class="control-panel glass-card">
-                <h2 class="panel-title"><i class="fa-solid fa-list-video"></i> Bước 1: Chọn Video</h2>
+                <!-- Folder selector -->
+                <div class="folder-bar">
+                    <i class="fa-solid fa-folder-open folder-icon"></i>
+                    <input type="text" id="folder-input" class="folder-input" placeholder="Đường dẫn thư mục...">
+                    <button id="btn-browse-folder" class="btn btn-secondary btn-icon" title="Chọn thư mục">
+                        <i class="fa-solid fa-folder-tree"></i>
+                    </button>
+                    <button id="btn-apply-folder" class="btn btn-secondary btn-icon" title="Áp dụng đường dẫn">
+                        <i class="fa-solid fa-check"></i>
+                    </button>
+                    <button id="btn-refresh-files" class="btn btn-secondary btn-icon" title="Làm mới danh sách">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
+                </div>
+
+                <h2 class="panel-title"><i class="fa-solid fa-list-video"></i> Bước 1: Chọn Video / Ảnh</h2>
                 <div class="video-list-container">
                     <ul id="video-list" class="video-list">
-                        <li class="loading-item"><i class="fa-solid fa-circle-notch fa-spin"></i> Đang tải danh sách video...</li>
+                        <li class="loading-item"><i class="fa-solid fa-circle-notch fa-spin"></i> Đang tải danh sách...</li>
                     </ul>
                 </div>
 
