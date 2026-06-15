@@ -25,6 +25,26 @@ if %errorlevel% neq 0 (
 )
 
 for /f "tokens=*" %%v in ('python --version 2^>^&1') do echo  Tim thay: %%v
+
+:: Canh bao Python 3.13+ chua duoc ho tro tot
+for /f "tokens=2 delims= " %%v in ('python --version 2^>^&1') do (
+    for /f "tokens=1,2 delims=." %%a in ("%%v") do (
+        if %%a GEQ 3 if %%b GEQ 13 (
+            echo.
+            echo  ==========================================
+            echo  [CANH BAO] Ban dang dung Python %%v
+            echo.
+            echo  Python 3.13 / 3.14 chua duoc ho tro tot.
+            echo  Khuyen dung Python 3.10 / 3.11 / 3.12:
+            echo    https://www.python.org/downloads/
+            echo.
+            echo  Nhan Enter de thu tiep tuc, hoac dong cua
+            echo  so va cai lai Python 3.12 roi chay lai.
+            echo  ==========================================
+            pause
+        )
+    )
+)
 echo.
 
 :: --- Tao moi truong ao neu chua co ---
