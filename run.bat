@@ -1,4 +1,6 @@
 @echo off
+:: Di chuyen vao thu muc chua file bat nay (quan trong!)
+cd /d "%~dp0"
 chcp 65001 >nul 2>&1
 title Antigravity Watermark Eraser
 
@@ -33,13 +35,20 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 :: --- Cap nhat / cai thu vien ---
-echo  [2/3] Dang kiem tra thu vien...
-.venv\Scripts\pip install -q --upgrade pip
-.venv\Scripts\pip install -q -r requirements.txt
+echo  [2/3] Dang cai dat thu vien (lan dau co the mat 1-2 phut)...
+.venv\Scripts\pip install --upgrade pip
+.venv\Scripts\pip install -r requirements.txt
 if %errorlevel% neq 0 (
     echo.
-    echo  [LOI] Cai dat thu vien that bai.
-    echo  Thu chay thu cong: .venv\Scripts\pip install -r requirements.txt
+    echo  ==========================================
+    echo  [LOI] Cai dat thu vien that bai!
+    echo.
+    echo  Nguyen nhan co the:
+    echo   - Khong co ket noi internet
+    echo   - Python chua duoc cai dung
+    echo.
+    echo  Bam phim bat ky de dong.
+    echo  ==========================================
     pause
     exit /b 1
 )
