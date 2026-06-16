@@ -24,7 +24,6 @@ let panOriginX = 0, panOriginY = 0;
 
 // DOM Elements
 const videoList = document.getElementById('video-list');
-const settingsGroup = document.getElementById('settings-group');
 const canvasPlaceholder = document.getElementById('canvas-placeholder');
 const interactiveContainer = document.getElementById('interactive-container');
 const previewImage = document.getElementById('preview-image');
@@ -78,6 +77,16 @@ const ctx = selectionCanvas.getContext('2d');
 // Current file type
 let currentFileType = 'video'; // 'video' | 'image'
 
+// Sensitivity state
+let currentSensitivity = 'medium';
+
+// Toggle all settings-group elements
+function setSettingsDisabled(disabled) {
+    document.querySelectorAll('.settings-group').forEach(el => {
+        el.classList.toggle('disabled', disabled);
+    });
+}
+
 // Folder bar elements
 const folderInput   = document.getElementById('folder-input');
 const btnBrowse     = document.getElementById('btn-browse-folder');
@@ -102,12 +111,25 @@ document.addEventListener('DOMContentLoaded', () => {
         resultModalEl.classList.add('hidden');
     });
 
+    setupSensitivityButtons();
     setupSliders();
     document.querySelectorAll('input[name="method"]').forEach(radio => {
         radio.addEventListener('change', updateMethodUI);
     });
     updateMethodUI();
 });
+
+// ---- Sensitivity buttons ----------------------------------------------------
+function setupSensitivityButtons() {
+    document.querySelectorAll('.sens-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.sens-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentSensitivity = btn.dataset.sens;
+            if (!btnProcess.disabled) schedulePreview();
+        });
+    });
+}
 
 // ---- Folder bar -------------------------------------------------------------
 async function loadCurrentFolder() {
@@ -269,7 +291,7 @@ async function selectVideo(videoName, element) {
     canvasPlaceholder.classList.remove('hidden');
     interactiveContainer.classList.add('hidden');
     zoomControls.classList.add('hidden');
-    settingsGroup.classList.add('disabled');
+    setSettingsDisabled(true);
     btnProcess.disabled = true;
 
     // Reset selection + zoom
@@ -305,7 +327,7 @@ async function selectVideo(videoName, element) {
                 canvasPlaceholder.classList.add('hidden');
                 interactiveContainer.classList.remove('hidden');
                 zoomControls.classList.remove('hidden');
-                settingsGroup.classList.remove('disabled');
+                setSettingsDisabled(false);
                 resizeCanvas();
             };
         } else {
@@ -711,6 +733,7 @@ function buildShapePayload() {
         height: cropBox.origHeight,
         shape: currentShape,
         method: method,
+        sensitivity: currentSensitivity,
         params: collectParams()
     };
     if (currentShape === 'poly') payload.points = lassoOrigPoints;
