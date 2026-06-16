@@ -105,6 +105,56 @@ def _get_ffmpeg_bin() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Robust video helpers (thread-timeout to avoid hanging on bad codecs)
+# ---------------------------------------------------------------------------
+def _get_video_meta(video_path: str, timeout: float = 6) -> dict:
+    """Get video metadata via cv2 in a background thread with timeout.
+    Returns safe defaults if the file hangs (e.g. unsupported codec)."""
+    result: dict = {'w': 0, 'h': 0, 'fps': 25.0, 'duration': 0.0, 'n_frames': 0}
+    ev = threading.Event()
+
+    def _read():
+        try:
+            cap = cv2.VideoCapture(video_path)
+            if cap.isOpened():
+                result['w'] = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                result['h'] = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                fps_ = cap.get(cv2.CAP_PROP_FPS) or 25.0
+                result['fps'] = fps_
+                fc = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                result['n_frames'] = max(fc, 0)
+                result['duration'] = (fc / fps_) if fc > 0 else 0.0
+                cap.release()
+        except Exception:
+            pass
+        ev.set()
+
+    threading.Thread(target=_read, daemon=True).start()
+    ev.wait(timeout)
+    return result
+
+
+def _extract_frame_ffmpeg(video_path: str, out_path: str, seek_sec: float = 1.0) -> bool:
+    """Extract one frame via ffmpeg subprocess (timeout=20s).
+    Handles virtually all codecs; never hangs the server.
+    Returns True if the output file was written successfully."""
+    ffmpeg = _get_ffmpeg_bin()
+    for ss in [str(seek_sec), '0']:
+        cmd = [ffmpeg, '-y']
+        if ss != '0':
+            cmd += ['-ss', ss]
+        cmd += ['-i', video_path, '-vframes', '1', '-q:v', '2', out_path]
+        try:
+            r = subprocess.run(cmd, timeout=20,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if r.returncode == 0 and os.path.exists(out_path):
+                return True
+        except subprocess.TimeoutExpired:
+            pass
+    return False
+
+
+# ---------------------------------------------------------------------------
 # ROI mask builder
 # ---------------------------------------------------------------------------
 def build_roi_mask(w, h, shape, x1, y1, x2, y2, points=None):
@@ -133,39 +183,74 @@ def build_roi_mask(w, h, shape, x1, y1, x2, y2, points=None):
 # ---------------------------------------------------------------------------
 # Video helpers
 # ---------------------------------------------------------------------------
-def get_video_size(video_path):
-    cap = cv2.VideoCapture(video_path)
-    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    cap.release()
-    return w, h
+def get_video_size(video_path: str):
+    meta = _get_video_meta(video_path, timeout=5)
+    if meta['w'] > 0:
+        return meta['w'], meta['h']
+    # Fallback: extract a single frame via ffmpeg and measure it
+    import tempfile
+    tmp = tempfile.mktemp(suffix='.png')
+    if _extract_frame_ffmpeg(video_path, tmp):
+        frame = cv2.imread(tmp)
+        try: os.unlink(tmp)
+        except OSError: pass
+        if frame is not None:
+            return frame.shape[1], frame.shape[0]
+    return 1280, 720
 
 
-def pick_busy_frame(video_path, x1, y1, x2, y2, samples=8):
-    """Return (frame_index, BGR frame) with max ROI texture for a preview."""
-    cap = cv2.VideoCapture(video_path)
-    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
-    step = max(1, total // samples)
-    best_var, best_frame = -1.0, None
-    frame_idx = 0
-    while True:
-        if frame_idx % step == 0:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            roi = frame[y1:y2, x1:x2]
-            v = float(roi.var()) if roi.size else 0.0
-            if v > best_var:
-                best_var, best_frame = v, frame
-        else:
-            if not cap.grab():
-                break
-        frame_idx += 1
-    if best_frame is None:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-        _, best_frame = cap.read()
-    cap.release()
-    return best_frame
+def pick_busy_frame(video_path: str, x1, y1, x2, y2, samples=8, timeout=15):
+    """Return BGR frame with highest ROI variance (texture).
+    Runs in a background thread with timeout; falls back to ffmpeg if cv2 hangs."""
+    result = [None]
+    ev = threading.Event()
+
+    def _run():
+        try:
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                ev.set(); return
+            total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+            step = max(1, total // samples)
+            best_var, best_frame = -1.0, None
+            idx = 0
+            while True:
+                if idx % step == 0:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    roi = frame[y1:y2, x1:x2]
+                    v = float(roi.var()) if roi.size else 0.0
+                    if v > best_var:
+                        best_var, best_frame = v, frame
+                else:
+                    if not cap.grab():
+                        break
+                idx += 1
+            if best_frame is None:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                _, best_frame = cap.read()
+            cap.release()
+            result[0] = best_frame
+        except Exception:
+            pass
+        ev.set()
+
+    threading.Thread(target=_run, daemon=True).start()
+    ev.wait(timeout)
+
+    if result[0] is not None:
+        return result[0]
+
+    # cv2 hung or failed — use ffmpeg to grab at least one frame
+    import tempfile
+    tmp = tempfile.mktemp(suffix='.png')
+    if _extract_frame_ffmpeg(video_path, tmp):
+        frame = cv2.imread(tmp)
+        try: os.unlink(tmp)
+        except OSError: pass
+        return frame
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -353,24 +438,24 @@ def api_extract_frame():
                 "width": w, "height": h, "duration": 0, "type": "image"
             })
 
-        # --- video ---
-        cap = cv2.VideoCapture(path)
-        if not cap.isOpened():
-            return jsonify({"success": False, "error": "Cannot open video"})
-        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-        duration = cap.get(cv2.CAP_PROP_FRAME_COUNT) / fps
-        cap.set(cv2.CAP_PROP_POS_MSEC, 1000 if duration > 1.0 else int(duration * 100))
-        ret, frame = cap.read()
-        if not ret:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            ret, frame = cap.read()
-        cap.release()
-        if not ret:
-            return jsonify({"success": False, "error": "Could not read frame"})
+        # --- video: use ffmpeg to extract frame (handles all codecs, no hanging) ---
+        ok = _extract_frame_ffmpeg(path, preview_path, seek_sec=1.0)
+        if not ok:
+            return jsonify({"success": False,
+                            "error": "Không thể trích xuất khung hình "
+                                     "(codec không được hỗ trợ hoặc file bị lỗi)"})
+
+        # Read extracted frame for exact dimensions
+        frame = cv2.imread(preview_path)
+        if frame is None:
+            return jsonify({"success": False, "error": "Cannot read extracted frame"})
+        h, w = frame.shape[:2]
         _frame_cache[name] = frame  # cache for preview reuse
-        cv2.imwrite(preview_path, frame)
+
+        # Get duration via cv2 with timeout (best-effort, doesn't block)
+        meta = _get_video_meta(path, timeout=4)
+        duration = meta['duration']
+
         return jsonify({
             "success": True,
             "preview_url": f"/previews/{preview_name}",
