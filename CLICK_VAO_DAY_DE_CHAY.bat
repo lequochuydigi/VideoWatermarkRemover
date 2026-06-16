@@ -71,6 +71,24 @@ netsh advfirewall firewall add rule name="WatermarkEraser-Python" dir=in action=
 echo  Xong!
 echo.
 
+:: --- Kiem tra import truoc khi chay ---
+echo  [2.6] Kiem tra thu vien...
+.venv\Scripts\python -c "import cv2; import numpy; import flask; print('  -> Tat ca thu vien OK')"
+if %errorlevel% neq 0 (
+    echo.
+    echo  ==========================================
+    echo  [LOI] Loi import thu vien!
+    echo.
+    echo  Thu:
+    echo   1. Xoa thu muc .venv
+    echo   2. Cai Python 3.12: python.org/downloads
+    echo   3. Chay lai file bat nay
+    echo  ==========================================
+    pause
+    exit /b 1
+)
+echo.
+
 :: --- Khoi dong server ---
 echo  [3/3] Dang khoi dong server...
 echo.
