@@ -23,7 +23,10 @@ Xóa watermark VEO 3 / Veo Omni khỏi video và ảnh bằng Reverse Alpha-Blen
 Script sẽ tự động:
 - Tạo môi trường ảo `.venv`
 - Cài thư viện từ `requirements.txt`
-- Mở trình duyệt tại `http://localhost:5000`
+- Mở trình duyệt tại `http://127.0.0.1:8080`
+
+> ⚠️ **Lưu ý**: Chỉ hỗ trợ **Python 3.10 / 3.11 / 3.12**. Python 3.13+ chưa được hỗ trợ.  
+> Tải Python 3.12 tại: https://www.python.org/downloads/release/python-31210/
 
 ---
 

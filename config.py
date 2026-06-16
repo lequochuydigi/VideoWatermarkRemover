@@ -24,5 +24,5 @@ VIDEOS_DIR: str = os.environ.get(
 )
 
 HOST: str = os.environ.get("HOST", "127.0.0.1")
-PORT: int = int(os.environ.get("PORT", "5000"))
-DEBUG: bool = os.environ.get("DEBUG", "true").lower() not in ("0", "false", "no")
+PORT: int = int(os.environ.get("PORT", "8080"))
+DEBUG: bool = os.environ.get("DEBUG", "false").lower() not in ("0", "false", "no")
