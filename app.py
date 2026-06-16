@@ -141,7 +141,7 @@ def get_video_size(video_path):
     return w, h
 
 
-def pick_busy_frame(video_path, x1, y1, x2, y2, samples=24):
+def pick_busy_frame(video_path, x1, y1, x2, y2, samples=8):
     """Return (frame_index, BGR frame) with max ROI texture for a preview."""
     cap = cv2.VideoCapture(video_path)
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
@@ -230,9 +230,14 @@ def get_files():
 
 
 # ---------------------------------------------------------------------------
-# In-memory task store
+# In-memory task store + caches
 # ---------------------------------------------------------------------------
 tasks = {}
+
+# Keyed by (video_name, x1, y1, x2, y2) — avoids re-reading video frames on slider changes
+_median_cache: dict = {}
+# Keyed by video_name — reuse the "busy frame" across preview calls
+_frame_cache: dict = {}
 
 # ---------------------------------------------------------------------------
 # Routes — static / index
@@ -340,6 +345,7 @@ def api_extract_frame():
             if img is None:
                 return jsonify({"success": False, "error": "Cannot read image"})
             h, w = img.shape[:2]
+            _frame_cache[name] = img
             cv2.imwrite(preview_path, img)
             return jsonify({
                 "success": True,
@@ -363,6 +369,7 @@ def api_extract_frame():
         cap.release()
         if not ret:
             return jsonify({"success": False, "error": "Could not read frame"})
+        _frame_cache[name] = frame  # cache for preview reuse
         cv2.imwrite(preview_path, frame)
         return jsonify({
             "success": True,
@@ -492,9 +499,15 @@ def api_preview():
     try:
         file_is_image = is_image(name)
 
+        # Read image once (avoids duplicate imread calls)
         if file_is_image:
-            fw, fh = cv2.imread(path).shape[1], cv2.imread(path).shape[0]
+            img_bgr = _frame_cache.get(name) or cv2.imread(path)
+            if img_bgr is None:
+                return jsonify({"success": False, "error": "Cannot read image"})
+            _frame_cache[name] = img_bgr
+            fh, fw = img_bgr.shape[:2]
         else:
+            img_bgr = None
             fw, fh = get_video_size(path)
 
         roi_mask = build_roi_mask(fw, fh, shape, x1, y1, x2, y2, points)
@@ -504,7 +517,6 @@ def api_preview():
         if method == "smart":
             remover = SmartWatermarkRemover(sensitivity=sensitivity)
             if file_is_image:
-                img_bgr = cv2.imread(path)
                 stats = remover.analyze_image(
                     img_bgr, (x1, y1, x2, y2), roi_mask=roi_mask,
                     gain=params.get("gain"), floor=params.get("floor"),
@@ -512,15 +524,28 @@ def api_preview():
                     despill=params.get("despill"), edge_blur=params.get("edge_blur"))
                 frame_bgr = img_bgr
             else:
-                stats = remover.analyze(
-                    path, (x1, y1, x2, y2), roi_mask=roi_mask,
+                # --- Cached median (slow I/O happens only once per bbox) ---
+                median_key = (name, x1, y1, x2, y2)
+                if median_key not in _median_cache:
+                    if len(_median_cache) >= 10:
+                        _median_cache.pop(next(iter(_median_cache)))
+                    _median_cache[median_key] = remover.compute_median(path, (x1, y1, x2, y2))
+                stats = remover.fit_from_median(
+                    _median_cache[median_key], (x1, y1, x2, y2), roi_mask=roi_mask,
                     gain=params.get("gain"), floor=params.get("floor"),
                     edge_expand=params.get("edge"), tophat_thr=params.get("tophat"),
                     despill=params.get("despill"), edge_blur=params.get("edge_blur"))
-                frame_bgr = pick_busy_frame(path, x1, y1, x2, y2)
+                # --- Cached preview frame ---
+                if name not in _frame_cache:
+                    _frame_cache[name] = pick_busy_frame(path, x1, y1, x2, y2)
+                frame_bgr = _frame_cache[name]
         else:
-            frame_bgr = (cv2.imread(path) if file_is_image
-                         else pick_busy_frame(path, x1, y1, x2, y2))
+            if file_is_image:
+                frame_bgr = img_bgr
+            else:
+                if name not in _frame_cache:
+                    _frame_cache[name] = pick_busy_frame(path, x1, y1, x2, y2)
+                frame_bgr = _frame_cache[name]
 
         after_bgr = apply_method_bgr(frame_bgr, method, roi_mask,
                                      x1, y1, x2, y2, remover, params)

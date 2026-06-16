@@ -34,7 +34,7 @@ class SmartWatermarkRemover:
         self.edge_blur = 0
         self.stats = {}
 
-        self.max_frames_to_analyze = 30
+        self.max_frames_to_analyze = 20
 
         self._presets = {
             'low':    (0.85, 0.025, 12),
@@ -120,10 +120,9 @@ class SmartWatermarkRemover:
         return self.stats
 
     # ----------------------------------------------------------------- analyze
-    def analyze(self, video_path, bbox, roi_mask=None,
-                gain=None, floor=None, edge_expand=None, tophat_thr=None,
-                despill=None, edge_blur=None):
-        """Estimate the watermark alpha matte from multiple video frames."""
+    def compute_median(self, video_path, bbox):
+        """Read video frames and return temporal median crop (uint8).
+        This is the slow I/O step — cache its result to avoid re-reading."""
         x1, y1, x2, y2 = [int(v) for v in bbox]
         if x2 <= x1 or y2 <= y1:
             raise Exception("Invalid bounding box")
@@ -156,18 +155,33 @@ class SmartWatermarkRemover:
         if len(crops) < 3:
             raise Exception("Not enough frames to analyze")
 
+        crops_arr = np.array(crops, dtype=np.float32)
+        return np.clip(np.median(crops_arr, axis=0), 0, 255).astype(np.uint8)
+
+    def fit_from_median(self, M_u8, bbox, roi_mask=None,
+                        gain=None, floor=None, edge_expand=None, tophat_thr=None,
+                        despill=None, edge_blur=None):
+        """Fit the alpha matte from a pre-computed median crop (fast, pure compute).
+        Call this on every slider change; call compute_median() once and cache it."""
+        x1, y1, x2, y2 = [int(v) for v in bbox]
+        h, w = M_u8.shape[:2]
         p_gain, p_floor, p_thr = self._presets.get(self.sensitivity,
                                                     self._presets['medium'])
         gain = p_gain if gain is None else float(gain)
         floor = p_floor if floor is None else float(floor)
         th_thr = p_thr if tophat_thr is None else float(tophat_thr)
-
-        crops_arr = np.array(crops, dtype=np.float32)
-        h, w = crops_arr.shape[1:3]
-
         feather = self._build_feather(h, w, roi_mask, x1, y1, x2, y2, edge_expand)
-        M_u8 = np.clip(np.median(crops_arr, axis=0), 0, 255).astype(np.uint8)
         return self._fit_matte(M_u8, h, w, feather, gain, floor, th_thr, despill, edge_blur)
+
+    def analyze(self, video_path, bbox, roi_mask=None,
+                gain=None, floor=None, edge_expand=None, tophat_thr=None,
+                despill=None, edge_blur=None):
+        """Estimate the watermark alpha matte from multiple video frames.
+        Thin wrapper around compute_median() + fit_from_median()."""
+        M_u8 = self.compute_median(video_path, bbox)
+        return self.fit_from_median(M_u8, bbox, roi_mask,
+                                    gain, floor, edge_expand, tophat_thr,
+                                    despill, edge_blur)
 
     def analyze_image(self, img_bgr, bbox, roi_mask=None,
                       gain=None, floor=None, edge_expand=None, tophat_thr=None,
