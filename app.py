@@ -1,14 +1,41 @@
 import os
+import sys
 import json
 import subprocess
 import threading
 import uuid
 
-import cv2
-import numpy as np
+# --- Kiem tra thu vien bat buoc ngay khi khoi dong ---
+_missing = []
+try:
+    import cv2
+except ImportError:
+    _missing.append("opencv-python-headless")
+try:
+    import numpy as np
+except ImportError:
+    _missing.append("numpy")
+
+if _missing:
+    print("\n" + "="*50)
+    print("[LOI] Thieu thu vien:", ", ".join(_missing))
+    print()
+    print("Vui long chay run.bat thay vi chay app.py truc tiep.")
+    print("Neu da dung run.bat, xoa thu muc .venv roi chay lai.")
+    print("="*50 + "\n")
+    input("Nhan Enter de dong...")
+    sys.exit(1)
+
 from flask import Flask, jsonify, request, send_from_directory
 
-from smart_remover import SmartWatermarkRemover
+try:
+    from smart_remover import SmartWatermarkRemover
+except ImportError as e:
+    print(f"\n[LOI] Khong the import smart_remover: {e}")
+    print("Chay run.bat tu dung thu muc chua file nay.")
+    input("Nhan Enter de dong...")
+    sys.exit(1)
+
 import config
 
 

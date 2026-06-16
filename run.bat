@@ -84,17 +84,26 @@ start "" /B cmd /C "timeout /t 4 >nul && start http://localhost:5000"
 
 echo.
 echo  ==========================================
-echo   >>> http://localhost:5000
-echo   >>> Nhan Ctrl+C de dung
+echo   >>> Mo trinh duyet: http://localhost:5000
+echo   >>> Nhan Ctrl+C de dung server
 echo  ==========================================
 echo.
+echo  [LOG SERVER - doc neu co loi]
+echo  ----------------------------------------
 
-:: Chay server - hien thi loi truc tiep ra cua so nay
+:: Chay server - loi hien ra truc tiep o day
 .venv\Scripts\python app.py
 
-:: Neu den duoc day la server bi dung
+:: Neu den duoc day la server da dung hoac bi loi
 echo.
 echo  ==========================================
-echo  Server da dung. Xem loi o tren neu co.
+echo  Server da dung.
+echo.
+echo  Neu gap loi "No module" hoac "ImportError":
+echo    1. Xoa thu muc .venv trong folder nay
+echo    2. Chay lai run.bat
+echo.
+echo  Neu gap loi khac, chup anh man hinh gui
+echo  cho nguoi ho tro.
 echo  ==========================================
 pause
