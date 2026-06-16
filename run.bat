@@ -97,8 +97,8 @@ echo.
 start "" /B cmd /C "timeout /t 4 >nul && start http://127.0.0.1:8080"
 
 echo  ==========================================
-echo   >>> Dang chay tai: http://127.0.0.1:8080
-echo   >>> Nhan Ctrl+C de dung server
+echo   Dang chay tai: http://127.0.0.1:8080
+echo   Nhan Ctrl+C de dung server
 echo  ==========================================
 echo.
 echo  [Nhat ky server]
