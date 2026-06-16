@@ -24,22 +24,11 @@ if %errorlevel% neq 0 (
 
 for /f "tokens=*" %%v in ('python --version 2^>^&1') do echo  Tim thay: %%v
 
-:: Canh bao Python 3.13 / 3.14 chua duoc ho tro
+:: Canh bao nhe neu Python 3.13+
 for /f "tokens=2 delims= " %%v in ('python --version 2^>^&1') do (
     for /f "tokens=1,2 delims=." %%a in ("%%v") do (
         if %%a GEQ 3 if %%b GEQ 13 (
-            echo.
-            echo  ==========================================
-            echo  [CANH BAO] Python %%v chua duoc ho tro!
-            echo.
-            echo  Vui long cai Python 3.12:
-            echo    https://www.python.org/downloads/release/python-31210/
-            echo  Nho tick "Add Python to PATH"
-            echo  Sau do xoa thu muc .venv va chay lai.
-            echo  ==========================================
-            echo.
-            pause
-            exit /b 1
+            echo  [CANH BAO] Python %%v - neu gap loi cai dat thi thu Python 3.12
         )
     )
 )
