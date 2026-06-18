@@ -7,9 +7,25 @@ venv/
 env/
 *.egg-info/
 
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+
 # Output / temp files
 previews/
 *.mp4
+*.avi
+*.mov
+*.mkv
+
+# Settings & secrets (local user data, should never commit)
+settings.json
+.env
 
 # Keep the videos placeholder folder
 !videos/
@@ -24,6 +40,3 @@ videos/*
 # OS
 .DS_Store
 Thumbs.db
-
-# Env overrides
-.env

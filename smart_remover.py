@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import threading
 
 
 class SmartWatermarkRemover:
@@ -158,6 +159,49 @@ class SmartWatermarkRemover:
         crops_arr = np.array(crops, dtype=np.float32)
         return np.clip(np.median(crops_arr, axis=0), 0, 255).astype(np.uint8)
 
+    def compute_median_safe(self, video_path, bbox, timeout=30):
+        """Compute median with timeout (30s default).
+        If timeout, try again with fewer frames (8 instead of 20).
+        Prevents hanging on unsupported codecs."""
+        result = [None]
+        ev = threading.Event()
+        exception = [None]
+
+        def _run():
+            try:
+                result[0] = self.compute_median(video_path, bbox)
+            except Exception as e:
+                exception[0] = e
+            ev.set()
+
+        # First attempt: 20 frames (normal)
+        threading.Thread(target=_run, daemon=True).start()
+        ev.wait(timeout)
+
+        if result[0] is not None:
+            return result[0]
+
+        if exception[0] and "Cannot open video" in str(exception[0]):
+            raise exception[0]
+
+        # Timeout — retry with fewer frames
+        self.max_frames_to_analyze = 8
+        result[0] = None
+        ev.clear()
+        threading.Thread(target=_run, daemon=True).start()
+        ev.wait(timeout // 2)  # 15s for quick mode
+
+        # Restore default
+        self.max_frames_to_analyze = 20
+
+        if result[0] is not None:
+            return result[0]
+
+        if exception[0]:
+            raise exception[0]
+
+        raise Exception("Analyze timeout (video codec may not be supported)")
+
     def fit_from_median(self, M_u8, bbox, roi_mask=None,
                         gain=None, floor=None, edge_expand=None, tophat_thr=None,
                         despill=None, edge_blur=None):
@@ -177,8 +221,8 @@ class SmartWatermarkRemover:
                 gain=None, floor=None, edge_expand=None, tophat_thr=None,
                 despill=None, edge_blur=None):
         """Estimate the watermark alpha matte from multiple video frames.
-        Thin wrapper around compute_median() + fit_from_median()."""
-        M_u8 = self.compute_median(video_path, bbox)
+        Thin wrapper around compute_median_safe() + fit_from_median()."""
+        M_u8 = self.compute_median_safe(video_path, bbox, timeout=60)
         return self.fit_from_median(M_u8, bbox, roi_mask,
                                     gain, floor, edge_expand, tophat_thr,
                                     despill, edge_blur)

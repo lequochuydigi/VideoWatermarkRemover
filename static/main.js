@@ -80,6 +80,23 @@ let currentFileType = 'video'; // 'video' | 'image'
 // Sensitivity state
 let currentSensitivity = 'medium';
 
+// Toast notification system
+function showToast(message, type = 'error', duration = 5000) {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    // Trigger animation
+    setTimeout(() => toast.classList.add('show'), 10);
+
+    // Remove after duration
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+}
+
 // Toggle all settings-group elements
 function setSettingsDisabled(disabled) {
     document.querySelectorAll('.settings-group').forEach(el => {
@@ -774,7 +791,7 @@ async function runPreview(silent) {
                 baStats.innerText = '';
             }
         } else if (!silent) {
-            alert(`Lỗi tạo preview: ${data.error}`);
+            showToast(`Lỗi preview: ${data.error}`, 'error', 6000);
         }
     } catch (err) {
         baLoading.classList.add('hidden');

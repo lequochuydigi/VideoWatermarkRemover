@@ -614,7 +614,13 @@ def api_preview():
                 if median_key not in _median_cache:
                     if len(_median_cache) >= 10:
                         _median_cache.pop(next(iter(_median_cache)))
-                    _median_cache[median_key] = remover.compute_median(path, (x1, y1, x2, y2))
+                    try:
+                        # compute_median_safe: timeout 30s, retry with 8 frames if hung
+                        _median_cache[median_key] = remover.compute_median_safe(
+                            path, (x1, y1, x2, y2), timeout=30)
+                    except Exception as e:
+                        return jsonify({"success": False,
+                                        "error": f"Analyze timeout hoặc codec lỗi: {str(e)[:100]}"})
                 stats = remover.fit_from_median(
                     _median_cache[median_key], (x1, y1, x2, y2), roi_mask=roi_mask,
                     gain=params.get("gain"), floor=params.get("floor"),
@@ -734,12 +740,17 @@ def process_video_thread(task_id, video_path, output_path,
         if method == "smart":
             tasks[task_id]["status"] = "analyzing"
             remover = SmartWatermarkRemover(sensitivity=sensitivity)
-            remover.analyze(video_path, (x1, y1, x2, y2), roi_mask=mask,
-                            gain=params.get("gain"), floor=params.get("floor"),
-                            edge_expand=params.get("edge"),
-                            tophat_thr=params.get("tophat"),
-                            despill=params.get("despill"),
-                            edge_blur=params.get("edge_blur"))
+            try:
+                remover.analyze(video_path, (x1, y1, x2, y2), roi_mask=mask,
+                                gain=params.get("gain"), floor=params.get("floor"),
+                                edge_expand=params.get("edge"),
+                                tophat_thr=params.get("tophat"),
+                                despill=params.get("despill"),
+                                edge_blur=params.get("edge_blur"))
+            except Exception as e:
+                tasks[task_id]["status"] = "failed"
+                tasks[task_id]["error"] = f"Analyze failed: {str(e)[:150]}"
+                return
 
         tasks[task_id]["status"] = "processing"
 
