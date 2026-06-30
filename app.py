@@ -540,6 +540,7 @@ def api_videos():
 # ---------------------------------------------------------------------------
 @app.route("/api/extract_frame", methods=["POST"])
 def api_extract_frame():
+    import hashlib
     data = request.json or {}
     name = data.get("video_name")
     if not name:
@@ -549,7 +550,9 @@ def api_extract_frame():
     if not os.path.exists(path):
         return jsonify({"success": False, "error": "File not found"})
 
-    preview_name = f"{name}_preview.png"
+    # Use MD5 hash of filename as preview filename → avoids Unicode/special chars in URL
+    safe_key = hashlib.md5(name.encode("utf-8")).hexdigest()
+    preview_name = f"{safe_key}_preview.png"
     preview_path = os.path.join(PREVIEW_DIR, preview_name)
 
     try:

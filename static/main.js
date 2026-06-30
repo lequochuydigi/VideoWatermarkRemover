@@ -362,7 +362,8 @@ async function selectVideo(videoName, element) {
             // Hide detect/auto-scan for images (need video frames for variance)
             btnDetect.style.display = currentFileType === 'image' ? 'none' : '';
 
-            previewImage.src = data.preview_url + "?t=" + new Date().getTime();
+            previewImage.onload = null;
+            previewImage.onerror = null;
 
             previewImage.onload = () => {
                 canvasPlaceholder.classList.add('hidden');
@@ -371,6 +372,12 @@ async function selectVideo(videoName, element) {
                 setSettingsDisabled(false);
                 resizeCanvas();
             };
+
+            previewImage.onerror = () => {
+                canvasPlaceholder.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-danger"></i><p>Không thể hiển thị ảnh xem trước</p>`;
+            };
+
+            previewImage.src = data.preview_url + "?t=" + new Date().getTime();
         } else {
             canvasPlaceholder.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-danger"></i><p>Lỗi: ${data.error}</p>`;
         }
