@@ -547,3 +547,82 @@ header { text-align: center; }
 .toast-error { border-color: rgba(239, 68, 68, 0.3); }
 .toast-success { border-color: rgba(16, 185, 129, 0.3); color: #10b981; }
 .toast-warning { border-color: rgba(245, 158, 11, 0.3); color: #f59e0b; }
+
+/* Desktop Exit App Button */
+.header-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.35rem;
+    width: 100%;
+}
+.header-main .logo {
+    margin-bottom: 0;
+    justify-content: flex-start;
+}
+.btn-exit {
+    background: rgba(239, 68, 68, 0.15) !important;
+    border: 1px solid rgba(239, 68, 68, 0.4) !important;
+    color: #ef4444 !important;
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+}
+.btn-exit:hover {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
+}
+
+/* ============================================================
+   RESPONSIVENESS
+   ============================================================ */
+@media (max-width: 992px) {
+    .workspace {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    .options-panel {
+        order: 2; /* Move settings below preview on small screens */
+    }
+    .preview-panel {
+        order: 1;
+    }
+    .steps-container {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    .header-main {
+        flex-direction: column;
+        text-align: center;
+        gap: 0.8rem;
+    }
+    .logo {
+        justify-content: center;
+    }
+    body {
+        padding: 10px;
+    }
+    .app-container {
+        padding: 1.2rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .folder-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .btn-icon {
+        width: 100%;
+        text-align: center;
+    }
+}
+

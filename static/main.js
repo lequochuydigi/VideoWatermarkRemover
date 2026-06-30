@@ -21,6 +21,7 @@ let isPanning = false;
 let spaceDown = false;
 let panStartX = 0, panStartY = 0;
 let panOriginX = 0, panOriginY = 0;
+let activeTool = 'select';        // select | pan
 
 // DOM Elements
 const videoList = document.getElementById('video-list');
@@ -127,6 +128,29 @@ document.addEventListener('DOMContentLoaded', () => {
     btnCloseResult.addEventListener('click', () => {
         resultModalEl.classList.add('hidden');
     });
+
+    // Exit App handler
+    const btnExitApp = document.getElementById('btn-exit-app');
+    if (btnExitApp) {
+        btnExitApp.addEventListener('click', async () => {
+            if (confirm('Bạn có chắc chắn muốn thoát ứng dụng và tắt server?')) {
+                btnExitApp.disabled = true;
+                btnExitApp.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Đang tắt...';
+                try {
+                    const res = await fetch('/api/shutdown', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast('Ứng dụng đã được tắt. Bạn có thể đóng cửa sổ này.', 'success');
+                        setTimeout(() => { window.close(); }, 1000);
+                    }
+                } catch (e) {
+                    // Since server exits immediately, fetch might fail. That's fine.
+                    showToast('Đang tắt ứng dụng...', 'success');
+                    setTimeout(() => { window.close(); }, 1000);
+                }
+            }
+        });
+    }
 
     setupSensitivityButtons();
     setupSliders();
@@ -397,20 +421,44 @@ function setupZoomListeners() {
     btnZoomOut.addEventListener('click', () => setZoom(zoomLevel - 0.5));
     btnZoomReset.addEventListener('click', resetZoom);
 
-    // Space toggles pan mode
+    // Tool switching buttons
+    const btnToolSelect = document.getElementById('btn-tool-select');
+    const btnToolPan = document.getElementById('btn-tool-pan');
+
+    if (btnToolSelect && btnToolPan) {
+        btnToolSelect.addEventListener('click', () => {
+            activeTool = 'select';
+            btnToolSelect.classList.add('active');
+            btnToolPan.classList.remove('active');
+            selectionCanvas.style.cursor = 'crosshair';
+        });
+
+        btnToolPan.addEventListener('click', () => {
+            activeTool = 'pan';
+            btnToolPan.classList.add('active');
+            btnToolSelect.classList.remove('active');
+            selectionCanvas.style.cursor = 'grab';
+        });
+    }
+
+    // Space toggles pan mode, and S/H keys switch tools
     window.addEventListener('keydown', (e) => {
         if (e.code === 'Space' && !spaceDown) {
             spaceDown = true;
             if (zoomLevel > 1) selectionCanvas.style.cursor = 'grab';
-            // prevent page scroll when over the canvas
             if (document.activeElement === document.body) e.preventDefault();
+        } else if (e.code === 'KeyS' && document.activeElement === document.body) {
+            if (btnToolSelect) btnToolSelect.click();
+        } else if (e.code === 'KeyH' && document.activeElement === document.body) {
+            if (btnToolPan) btnToolPan.click();
         }
     });
+
     window.addEventListener('keyup', (e) => {
         if (e.code === 'Space') {
             spaceDown = false;
             isPanning = false;
-            selectionCanvas.style.cursor = 'crosshair';
+            selectionCanvas.style.cursor = activeTool === 'pan' ? 'grab' : 'crosshair';
         }
     });
 }
@@ -428,17 +476,28 @@ function getCanvasPoint(e) {
 
 // Setup mouse drawing listeners on canvas
 function setupCanvasListeners() {
+    // Disable context menu on canvas to allow right-click dragging
+    selectionCanvas.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+    });
+
     selectionCanvas.addEventListener('mousedown', (e) => {
         if (!selectedVideo) return;
 
-        // Pan mode (Space held + zoomed in)
-        if (spaceDown && zoomLevel > 1) {
+        // Pan mode: Space held OR Right Click (button === 2) OR Middle Click (button === 1) OR activeTool is 'pan'
+        const isPanClick = (spaceDown || e.button === 2 || e.button === 1 || activeTool === 'pan');
+        
+        if (isPanClick) {
             isPanning = true;
             panStartX = e.clientX; panStartY = e.clientY;
             panOriginX = panX; panOriginY = panY;
             selectionCanvas.style.cursor = 'grabbing';
+            e.preventDefault();
             return;
         }
+
+        // Only draw selection with left click
+        if (e.button !== 0) return;
 
         isDrawing = true;
         const p = getCanvasPoint(e);
@@ -476,10 +535,10 @@ function setupCanvasListeners() {
         }
     });
 
-    selectionCanvas.addEventListener('mouseup', () => {
+    selectionCanvas.addEventListener('mouseup', (e) => {
         if (isPanning) {
             isPanning = false;
-            selectionCanvas.style.cursor = spaceDown ? 'grab' : 'crosshair';
+            selectionCanvas.style.cursor = (spaceDown || activeTool === 'pan') ? 'grab' : 'crosshair';
             return;
         }
         if (!isDrawing) return;

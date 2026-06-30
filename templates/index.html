@@ -19,9 +19,14 @@
     <div class="app-container">
         <!-- Header -->
         <header>
-            <div class="logo">
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                <span>Antigravity <span class="highlight">Watermark Eraser</span></span>
+            <div class="header-main">
+                <div class="logo">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>Antigravity <span class="highlight">Watermark Eraser</span></span>
+                </div>
+                <button id="btn-exit-app" class="btn btn-exit" title="Thoát ứng dụng và tắt server">
+                    <i class="fa-solid fa-power-off"></i> Thoát
+                </button>
             </div>
             <p class="subtitle">Xóa watermark VEO/VieON siêu nhỏ gọn ở góc video bằng công nghệ AI Inpainting</p>
         </header>
@@ -229,11 +234,14 @@
             <!-- Right: Canvas + Preview -->
             <section class="preview-panel glass-card">
                 <div id="zoom-controls" class="zoom-controls hidden">
+                    <button id="btn-tool-select" class="btn btn-secondary zoom-btn active" title="Vẽ vùng chọn (Phím S)"><i class="fa-solid fa-crop-simple"></i></button>
+                    <button id="btn-tool-pan" class="btn btn-secondary zoom-btn" title="Di chuyển ảnh (Phím H)"><i class="fa-solid fa-hand"></i></button>
+                    <span style="color:rgba(255,255,255,0.15); margin:0 0.25rem;">|</span>
                     <button id="btn-zoom-out" class="btn btn-secondary zoom-btn" title="Thu nhỏ"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
                     <span id="zoom-level" class="zoom-level">100%</span>
                     <button id="btn-zoom-in" class="btn btn-secondary zoom-btn" title="Phóng to"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
                     <button id="btn-zoom-reset" class="btn btn-secondary zoom-btn" title="Đặt lại"><i class="fa-solid fa-rotate-left"></i></button>
-                    <span class="zoom-hint">Khi đã zoom: giữ <b>Space</b> + kéo để di chuyển</span>
+                    <span class="zoom-hint">Kéo chuột trái để chọn. Kéo bằng chuột phải hoặc dùng công cụ Bàn tay để di chuyển.</span>
                 </div>
 
                 <div class="canvas-wrapper">

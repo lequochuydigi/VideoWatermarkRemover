@@ -40,3 +40,16 @@ videos/*
 # OS
 .DS_Store
 Thumbs.db
+
+# PyInstaller / Build outputs
+build/
+dist/
+*.spec
+*.exe
+
+# Debug / Temporary test files
+debug_*.py
+test_*
+*.jpg
+*.png
+watermark_remover.log

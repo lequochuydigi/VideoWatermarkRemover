@@ -31,6 +31,7 @@ class SmartWatermarkRemover:
         self.alpha = None            # float32 (h_roi, w_roi), per-pixel transparency
         self.opaque_mask = None      # uint8  (h_roi, w_roi), pixels too opaque to recover
         self.feather_mask = None     # float32 (h_roi, w_roi), 0..1 confined region
+        self.wm_color = np.array([255.0, 255.0, 255.0], dtype=np.float32)
         self.despill = 0.0
         self.edge_blur = 0
         self.stats = {}
@@ -80,28 +81,48 @@ class SmartWatermarkRemover:
         """Core: tophat → background estimate → alpha matte → feather.
         Sets self.alpha / opaque_mask / feather_mask and returns stats dict."""
         M = M_u8.astype(np.float32)
+        th_thr = max(3.0, float(th_thr))
 
         # --- Background estimate: tophat detects watermark body, inpaint fills it ---
         gray = cv2.cvtColor(M_u8, cv2.COLOR_BGR2GRAY)
         k = self._tophat_kernel(h, w)
         kern = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
         tophat = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, kern)
+        
+        # Coverage guard: prevent overfitting by increasing threshold if mask covers > 40% ROI
         rough = (tophat > th_thr).astype(np.uint8) * 255
+        coverage = np.count_nonzero(rough) / rough.size
+        if coverage > 0.40:
+            ret, thresh_otsu = cv2.threshold(tophat, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            safe_thr = max(th_thr + 15, thresh_otsu * 0.8)
+            rough = (tophat > safe_thr).astype(np.uint8) * 255
+            
         rough = cv2.dilate(rough, np.ones((3, 3), np.uint8), iterations=3)
+
+        # Estimate Watermark Color (W) instead of assuming 255 (white)
+        wm_mask = rough > 0
+        if np.any(wm_mask):
+            wm_color = np.percentile(M[wm_mask], 95, axis=0) # [B, G, R]
+        else:
+            wm_color = np.array([255., 255., 255.])
+        self.wm_color = np.clip(wm_color, 200.0, 255.0)
+
+        # Estimate clean background via inpaint
         B = (cv2.inpaint(M_u8, rough, 3, cv2.INPAINT_TELEA).astype(np.float32)
              if np.any(rough) else M.copy())
 
-        # --- Alpha matte: I = (1-a)*B + a*255  →  a = (I-B)/(255-B) ---
+        # --- Alpha matte: I = (1-a)*B + a*W  →  a = (I-B)/(W-B) ---
         eps = 1e-6
-        alpha3 = (M - B) / (255.0 - B + eps)
-        alpha = np.clip(alpha3.mean(axis=2), 0.0, 0.98)
-        alpha = np.clip(alpha * gain, 0.0, 0.98)
+        W3 = self.wm_color
+        alpha3 = (M - B) / (W3 - B + eps)
+        alpha = np.clip(alpha3.mean(axis=2), 0.0, 0.85)
+        alpha = np.clip(alpha * gain, 0.0, 0.85)
         alpha[alpha < floor] = 0.0
         alpha = cv2.GaussianBlur(alpha, (3, 3), 0)
         alpha = alpha * feather
 
         self.alpha = alpha.astype(np.float32)
-        self.opaque_mask = ((alpha > 0.9) * 255).astype(np.uint8)
+        self.opaque_mask = ((alpha > 0.95) * 255).astype(np.uint8)
         self.feather_mask = feather.astype(np.float32)
         self.despill = 0.0 if despill is None else float(despill)
         self.edge_blur = 0 if edge_blur is None else int(edge_blur)
@@ -111,12 +132,12 @@ class SmartWatermarkRemover:
         static_pct = wm_count / alpha.size * 100.0
         alpha_mean = float(alpha[wm].mean()) if wm_count > 0 else 0.0
         self.stats = {
-            'static_percent': round(static_pct, 1),
+            'static_percent': round(float(static_pct), 1),
             'transition_percent': round(
-                (np.count_nonzero(wm & (alpha < 0.6)) / alpha.size) * 100.0, 1),
-            'dynamic_percent': round(100.0 - static_pct, 1),
-            'alpha_mean': round(alpha_mean, 3),
-            'watermark_color': [255.0, 255.0, 255.0],
+                float(np.count_nonzero(wm & (alpha < 0.6)) / alpha.size * 100.0), 1),
+            'dynamic_percent': round(float(100.0 - static_pct), 1),
+            'alpha_mean': round(float(alpha_mean), 3),
+            'watermark_color': [round(float(c), 1) for c in self.wm_color],
         }
         return self.stats
 
@@ -263,8 +284,13 @@ class SmartWatermarkRemover:
 
         a3 = a[..., None]
         f = frame_rgb.astype(np.float32)
-        recovered = (f - a3 * 255.0) / (1.0 - a3 + 1e-6)
-        out = np.clip(recovered, 0, 255).astype(np.uint8)
+        W3 = self.wm_color[None, None, :]
+        recovered = (f - a3 * W3) / (1.0 - a3 + 1e-6)
+        
+        # Soft blending
+        blend_weight = np.clip(a3 * 2.0, 0, 1)
+        blended = f * (1.0 - blend_weight) + recovered * blend_weight
+        out = np.clip(blended, 0, 255).astype(np.uint8)
 
         # Fallback inpaint for fully-opaque pixels
         if self.opaque_mask is not None and np.any(self.opaque_mask):

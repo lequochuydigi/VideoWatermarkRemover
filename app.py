@@ -5,6 +5,8 @@ import subprocess
 import threading
 import uuid
 
+CREATE_NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000) if os.name == 'nt' else 0
+
 # --- Kiem tra thu vien bat buoc ngay khi khoi dong ---
 _missing = []
 try:
@@ -39,15 +41,58 @@ except ImportError as e:
 import config
 
 
-app = Flask(__name__)
+# ---------------------------------------------------------------------------
+# Paths & Logging (PyInstaller compatibility)
+# ---------------------------------------------------------------------------
+if getattr(sys, 'frozen', False):
+    BASE_DIR = sys._MEIPASS
+    WRITABLE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    WRITABLE_DIR = BASE_DIR
 
-# ---------------------------------------------------------------------------
-# Paths
-# ---------------------------------------------------------------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PREVIEW_DIR = os.path.join(BASE_DIR, "previews")
-SETTINGS_FILE = os.path.join(BASE_DIR, "settings.json")
+PREVIEW_DIR = os.path.join(WRITABLE_DIR, "previews")
+SETTINGS_FILE = os.path.join(WRITABLE_DIR, "settings.json")
+LOG_FILE = os.path.join(WRITABLE_DIR, "watermark_remover.log")
+
 os.makedirs(PREVIEW_DIR, exist_ok=True)
+
+import logging
+import traceback
+
+logging.basicConfig(
+    filename=LOG_FILE,
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] (%(filename)s:%(lineno)d) %(message)s",
+    encoding="utf-8"
+)
+
+# Output to console as well (if console is available)
+if sys.stdout is not None:
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+    logging.getLogger().addHandler(console_handler)
+
+logging.info("=========================================")
+logging.info("Antigravity Watermark Eraser Starting")
+logging.info(f"BASE_DIR (static resources): {BASE_DIR}")
+logging.info(f"WRITABLE_DIR (data & logs): {WRITABLE_DIR}")
+logging.info("=========================================")
+
+# Unhandled exception logger
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    logging.error("Unhandled exception:", exc_info=(exc_type, exc_value, exc_traceback))
+
+sys.excepthook = handle_exception
+
+# Flask initialization with explicit template and static paths (needed for PyInstaller bundle)
+app = Flask(__name__,
+            template_folder=os.path.join(BASE_DIR, "templates"),
+            static_folder=os.path.join(BASE_DIR, "static"))
+
 
 # ---------------------------------------------------------------------------
 # Settings persistence (folder remembered across restarts)
@@ -76,8 +121,90 @@ _videos_dir: list = [_settings.get("videos_dir", config.VIDEOS_DIR)]
 # ---------------------------------------------------------------------------
 # File-type helpers
 # ---------------------------------------------------------------------------
-VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".m4v", ".webm"}
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".tif"}
+VIDEO_EXTS = {
+    ".mp4", ".mov", ".avi", ".mkv", ".wmv", ".m4v", ".webm", 
+    ".flv", ".3gp", ".mpeg", ".mpg", ".ts", ".vob", ".asf", 
+    ".rmvb", ".ogv", ".divx", ".f4v"
+}
+IMAGE_EXTS = {
+    ".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".tif", 
+    ".jfif", ".heic", ".heif", ".rgb", ".rgba", ".gif", 
+    ".ico", ".jpe", ".tga", ".hdr", ".pic"
+}
+
+
+def _read_image(path: str) -> np.ndarray:
+    """Read an image file robustly.
+    Uses cv2.imread first, falls back to Pillow to support a wide range of formats (WEBP, HEIC, RGB, etc.)."""
+    # 1. Try OpenCV via numpy (supports Unicode on Windows)
+    try:
+        arr = np.fromfile(path, dtype=np.uint8)
+        if arr.size > 0:
+            img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if img is not None:
+                return img
+    except Exception as e:
+        logging.warning(f"OpenCV failed to read image '{path}': {e}")
+        
+    # 2. Try Pillow (PIL)
+    try:
+        from PIL import Image
+        import pillow_heif
+        pillow_heif.register_heif_opener()
+    except ImportError:
+        pass
+        
+    try:
+        from PIL import Image
+        pil_img = Image.open(path)
+        pil_img = pil_img.convert("RGB")
+        img_rgb = np.array(pil_img)
+        # Convert RGB to BGR for OpenCV
+        return cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
+    except Exception as e:
+        logging.error(f"Pillow fallback failed to read image '{path}': {e}", exc_info=True)
+        return None
+
+
+def _write_image(path: str, img: np.ndarray) -> bool:
+    """Write an image file robustly.
+    Uses cv2.imwrite first, falls back to Pillow to support formats like HEIC or custom formats."""
+    ext = _ext(path)
+    
+    # 1. Try OpenCV via numpy (supports Unicode on Windows)
+    if ext not in (".heic", ".heif"):
+        try:
+            success, encoded = cv2.imencode(ext, img)
+            if success:
+                encoded.tofile(path)
+                return True
+        except Exception as e:
+            logging.warning(f"OpenCV failed to write image '{path}': {e}")
+            
+    # 2. Try Pillow (PIL)
+    try:
+        from PIL import Image
+        import pillow_heif
+        pillow_heif.register_heif_opener()
+    except ImportError:
+        pass
+        
+    try:
+        from PIL import Image
+        # OpenCV BGR to PIL RGB
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        pil_img = Image.fromarray(img_rgb)
+        
+        # Save based on format/extension
+        save_format = None
+        if ext in (".heic", ".heif"):
+            save_format = "HEIF"
+            
+        pil_img.save(path, format=save_format)
+        return True
+    except Exception as e:
+        logging.error(f"Pillow failed to write image '{path}': {e}", exc_info=True)
+        return False
 
 
 def _ext(name: str) -> str:
@@ -146,7 +273,8 @@ def _extract_frame_ffmpeg(video_path: str, out_path: str, seek_sec: float = 1.0)
         cmd += ['-i', video_path, '-vframes', '1', '-q:v', '2', out_path]
         try:
             r = subprocess.run(cmd, timeout=20,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                               creationflags=CREATE_NO_WINDOW)
             if r.returncode == 0 and os.path.exists(out_path):
                 return True
         except subprocess.TimeoutExpired:
@@ -191,7 +319,7 @@ def get_video_size(video_path: str):
     import tempfile
     tmp = tempfile.mktemp(suffix='.png')
     if _extract_frame_ffmpeg(video_path, tmp):
-        frame = cv2.imread(tmp)
+        frame = _read_image(tmp)
         try: os.unlink(tmp)
         except OSError: pass
         if frame is not None:
@@ -246,7 +374,7 @@ def pick_busy_frame(video_path: str, x1, y1, x2, y2, samples=8, timeout=15):
     import tempfile
     tmp = tempfile.mktemp(suffix='.png')
     if _extract_frame_ffmpeg(video_path, tmp):
-        frame = cv2.imread(tmp)
+        frame = _read_image(tmp)
         try: os.unlink(tmp)
         except OSError: pass
         return frame
@@ -329,12 +457,12 @@ _frame_cache: dict = {}
 # ---------------------------------------------------------------------------
 @app.route("/")
 def index():
-    return send_from_directory("templates", "index.html")
+    return send_from_directory(os.path.join(BASE_DIR, "templates"), "index.html")
 
 
 @app.route("/static/<path:path>")
 def serve_static(path):
-    return send_from_directory("static", path)
+    return send_from_directory(os.path.join(BASE_DIR, "static"), path)
 
 
 @app.route("/previews/<path:path>")
@@ -426,12 +554,12 @@ def api_extract_frame():
 
     try:
         if is_image(name):
-            img = cv2.imread(path)
+            img = _read_image(path)
             if img is None:
                 return jsonify({"success": False, "error": "Cannot read image"})
             h, w = img.shape[:2]
             _frame_cache[name] = img
-            cv2.imwrite(preview_path, img)
+            _write_image(preview_path, img)
             return jsonify({
                 "success": True,
                 "preview_url": f"/previews/{preview_name}",
@@ -446,7 +574,7 @@ def api_extract_frame():
                                      "(codec không được hỗ trợ hoặc file bị lỗi)"})
 
         # Read extracted frame for exact dimensions
-        frame = cv2.imread(preview_path)
+        frame = _read_image(preview_path)
         if frame is None:
             return jsonify({"success": False, "error": "Cannot read extracted frame"})
         h, w = frame.shape[:2]
@@ -586,7 +714,7 @@ def api_preview():
 
         # Read image once (avoids duplicate imread calls)
         if file_is_image:
-            img_bgr = _frame_cache.get(name) or cv2.imread(path)
+            img_bgr = _frame_cache.get(name) or _read_image(path)
             if img_bgr is None:
                 return jsonify({"success": False, "error": "Cannot read image"})
             _frame_cache[name] = img_bgr
@@ -648,8 +776,8 @@ def api_preview():
         stamp = uuid.uuid4().hex[:8]
         before_name = f"prev_before_{stamp}.png"
         after_name  = f"prev_after_{stamp}.png"
-        cv2.imwrite(os.path.join(PREVIEW_DIR, before_name), frame_bgr[cy1:cy2, cx1:cx2])
-        cv2.imwrite(os.path.join(PREVIEW_DIR, after_name),  after_bgr[cy1:cy2,  cx1:cx2])
+        _write_image(os.path.join(PREVIEW_DIR, before_name), frame_bgr[cy1:cy2, cx1:cx2])
+        _write_image(os.path.join(PREVIEW_DIR, after_name),  after_bgr[cy1:cy2,  cx1:cx2])
 
         return jsonify({
             "success": True,
@@ -658,6 +786,7 @@ def api_preview():
             "stats": stats,
         })
     except Exception as e:
+        logging.error("Preview generation failed:", exc_info=True)
         return jsonify({"success": False, "error": str(e)})
 
 
@@ -684,7 +813,7 @@ def api_process_image():
         return jsonify({"success": False, "error": "File not found"})
 
     try:
-        img = cv2.imread(path)
+        img = _read_image(path)
         if img is None:
             return jsonify({"success": False, "error": "Cannot read image"})
         fh, fw = img.shape[:2]
@@ -704,12 +833,14 @@ def api_process_image():
         base, ext = os.path.splitext(name)
         output_name = f"{base}_no_watermark{ext}"
         output_path = os.path.join(_videos_dir[0], output_name)
-        cv2.imwrite(output_path, out)
+        if not _write_image(output_path, out):
+            raise Exception("Cannot write output image")
 
         return jsonify({"success": True,
                         "output_path": output_path,
                         "output_name": output_name})
     except Exception as e:
+        logging.error("Image processing failed:", exc_info=True)
         return jsonify({"success": False, "error": str(e)})
 
 
@@ -721,6 +852,7 @@ def process_video_thread(task_id, video_path, output_path,
                          roi_mask, params):
     try:
         params = params or {}
+        logging.info(f"Task {task_id}: Start processing '{video_path}' -> '{output_path}' (method: {method})")
 
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
@@ -729,6 +861,7 @@ def process_video_thread(task_id, video_path, output_path,
         h   = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
         total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+        logging.info(f"Task {task_id}: Video properties: {w}x{h} @ {fps} fps, total {total} frames")
 
         mask = (roi_mask if roi_mask is not None and roi_mask.shape[:2] == (h, w)
                 else cv2.resize(roi_mask, (w, h), interpolation=cv2.INTER_NEAREST)
@@ -739,6 +872,7 @@ def process_video_thread(task_id, video_path, output_path,
         remover = None
         if method == "smart":
             tasks[task_id]["status"] = "analyzing"
+            logging.info(f"Task {task_id}: Analyzing static watermark background...")
             remover = SmartWatermarkRemover(sensitivity=sensitivity)
             try:
                 remover.analyze(video_path, (x1, y1, x2, y2), roi_mask=mask,
@@ -747,7 +881,9 @@ def process_video_thread(task_id, video_path, output_path,
                                 tophat_thr=params.get("tophat"),
                                 despill=params.get("despill"),
                                 edge_blur=params.get("edge_blur"))
+                logging.info(f"Task {task_id}: Analyze complete. Stats: {remover.stats}")
             except Exception as e:
+                logging.error(f"Task {task_id}: Smart analyze failed", exc_info=True)
                 tasks[task_id]["status"] = "failed"
                 tasks[task_id]["error"] = f"Analyze failed: {str(e)[:150]}"
                 return
@@ -766,9 +902,11 @@ def process_video_thread(task_id, video_path, output_path,
             "-map", "0:v:0", "-map", "1:a:0?",
             "-shortest", output_path,
         ]
+        logging.info(f"Task {task_id}: Launching FFmpeg with command: {' '.join(cmd)}")
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE,
                                 stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL)
+                                stderr=subprocess.DEVNULL,
+                                creationflags=CREATE_NO_WINDOW)
         idx = 0
         try:
             while True:
@@ -779,11 +917,21 @@ def process_video_thread(task_id, video_path, output_path,
                                        x1, y1, x2, y2, remover, params)
                 proc.stdin.write(out.tobytes())
                 idx += 1
-                tasks[task_id]["progress"] = min(int(idx / total * 100), 99)
+                if idx % max(1, total // 10) == 0 or idx == total:
+                    pct = min(int(idx / total * 100), 99)
+                    tasks[task_id]["progress"] = pct
+                    logging.info(f"Task {task_id}: Progress {pct}% ({idx}/{total} frames)")
+        except Exception as e:
+            logging.error(f"Task {task_id}: Error processing frames", exc_info=True)
+            raise e
         finally:
             cap.release()
-            proc.stdin.close()
+            try:
+                proc.stdin.close()
+            except Exception:
+                pass
 
+        logging.info(f"Task {task_id}: Waiting for FFmpeg to finish...")
         proc.wait()
         if proc.returncode != 0:
             raise Exception(f"FFmpeg failed (exit {proc.returncode})")
@@ -791,8 +939,10 @@ def process_video_thread(task_id, video_path, output_path,
         tasks[task_id]["status"] = "completed"
         tasks[task_id]["progress"] = 100
         tasks[task_id]["output_path"] = output_path
+        logging.info(f"Task {task_id}: Completed successfully! Output file: {output_path}")
 
     except Exception as e:
+        logging.error(f"Task {task_id} failed with error:", exc_info=True)
         tasks[task_id]["status"] = "failed"
         tasks[task_id]["error"] = str(e)
 
@@ -848,9 +998,49 @@ def api_status(task_id):
     return jsonify({"success": True, "task": task})
 
 
+@app.route("/api/shutdown", methods=["POST"])
+def api_shutdown():
+    logging.info("Shutdown API called. Exiting application...")
+    def _exit():
+        import time
+        time.sleep(0.5)
+        logging.info("Exiting process.")
+        os._exit(0)
+    threading.Thread(target=_exit).start()
+    return jsonify({"success": True, "message": "Server shutting down..."})
+
+
+def start_browser_thread():
+    def _open():
+        import time
+        time.sleep(1.0)  # Wait for Flask to start
+        
+        edge_path = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+        chrome_path = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+        url = f"http://{config.HOST}:{config.PORT}"
+        
+        logging.info(f"Automatically launching browser window for URL: {url}")
+        
+        # Try MS Edge in app mode (looks like a standalone desktop app window)
+        if os.path.exists(edge_path):
+            logging.info("Found Microsoft Edge, launching in app mode.")
+            subprocess.Popen([edge_path, f"--app={url}"])
+        # Try Chrome in app mode
+        elif os.path.exists(chrome_path):
+            logging.info("Found Google Chrome, launching in app mode.")
+            subprocess.Popen([chrome_path, f"--app={url}"])
+        else:
+            logging.info("Edge/Chrome not found at standard paths. Fallback to default browser.")
+            import webbrowser
+            webbrowser.open(url)
+            
+    threading.Thread(target=_open, daemon=True).start()
+
+
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     print(f"Videos / images folder : {_videos_dir[0]}")
     print(f"Starting server        : http://{config.HOST}:{config.PORT}")
+    start_browser_thread()
     app.run(host=config.HOST, port=config.PORT, debug=config.DEBUG,
             use_reloader=False)
