@@ -6,6 +6,15 @@ Công cụ sử dụng thuật toán tính ngược độ mờ (`alpha`) của w
 
 ---
 
+## 🚀 Tải & Chạy Nhanh (.exe) - KHÔNG CẦN CÀI ĐẶT (Khuyên dùng cho Low-tech)
+
+Nếu bạn không muốn cài đặt Python hoặc thao tác dòng lệnh phức tạp, chỉ cần:
+1. **Tải file `.exe` chạy ngay tại đây**: 👉 **[Tải AntigravityWatermarkEraser.exe (v1.0.0)](https://github.com/lequochuydigi/VideoWatermarkRemover/releases/download/v1.0.0/AntigravityWatermarkEraser.exe)**
+2. Nhấp đúp vào file **`AntigravityWatermarkEraser.exe`** vừa tải về để mở ứng dụng.
+3. Trình duyệt sẽ tự động khởi động và mở công cụ cho bạn sử dụng ngay lập tức!
+
+---
+
 ## Về tác giả: Lê Quốc Huy Digi
 
 1. Chào các bạn mình là **Lê Quốc Huy** hay thường viết tắt là **Huy Digi**
@@ -15,7 +24,7 @@ Công cụ sử dụng thuật toán tính ngược độ mờ (`alpha`) của w
 
 ---
 
-## Cài đặt & Khởi động (Windows)
+## Cài đặt & Khởi động từ mã nguồn (Dành cho Lập trình viên)
 
 1. **Tải về** và giải nén
 2. Cài **Python 3.11+** — [tải tại đây](https://www.python.org/downloads/)  
