@@ -94,7 +94,7 @@ class SmartWatermarkRemover:
         coverage = np.count_nonzero(rough) / rough.size
         if coverage > 0.40:
             ret, thresh_otsu = cv2.threshold(tophat, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            safe_thr = max(th_thr + 15, thresh_otsu * 0.8)
+            safe_thr = max(th_thr + 15, ret * 0.8)
             rough = (tophat > safe_thr).astype(np.uint8) * 255
             
         rough = cv2.dilate(rough, np.ones((3, 3), np.uint8), iterations=3)
